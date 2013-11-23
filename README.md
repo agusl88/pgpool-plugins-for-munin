@@ -1,7 +1,7 @@
 pgpool-II plugin for munin
 --------------------------
 
-Perl version implementation of munin\_pgpool(Python) in repository https://github.com/vpetersson/munin\_pgpool .
+Perl version implementation of munin\_pgpool(Python) in repository https://github.com/vpetersson/munin_pgpool .
 
 ## SETUP
 ### Install
