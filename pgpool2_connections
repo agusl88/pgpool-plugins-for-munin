@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 my $argv = shift || '';
-my $VERSION = '0.0.1';
+my $VERSION = '0.0.2';
 
 if( $argv eq 'autoconf' ) {
     print 'yes'."\n";
@@ -65,7 +65,8 @@ if( $argv eq 'autoconf' ) {
         }
 
         # Count the number of processes of pgpool
-        $runcommand  = q(ps x);
+        $runcommand  = IPC::Cmd::can_run('ps') || 'ps';
+        $runcommand .= q( ax);
         $runcommand .= q( | grep 'pgpool: ' | grep -v 'grep') if $pathtogrep;
         $commandarg  = { 'timeout' => $timeoutsec * 2 };
         $cmdresults  = IPC::Cmd::run_forked( $runcommand, $commandarg );
