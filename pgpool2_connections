@@ -4,7 +4,7 @@ use strict;
 use warnings;
 
 my $argv = shift || '';
-my $VERSION = '0.0.2';
+my $VERSION = '0.0.3';
 
 if( $argv eq 'autoconf' ) {
     print 'yes'."\n";
@@ -26,62 +26,75 @@ if( $argv eq 'autoconf' ) {
     print $_."\n" for @$data;
 
 } else {
-    require IPC::Cmd;
 
     my $pgpoolhost = $ENV{'host'} || '127.0.0.1';
     my $pgpoolport = $ENV{'port'} || 9898;
     my $pgpooluser = $ENV{'user'} || 'munin';
     my $pgpoolpass = $ENV{'userpwd'} || '';
     my $pcpstatcmd = $ENV{'pcppath'} || 'pcp_pool_status';
-    my $pathtogrep = IPC::Cmd::can_run('grep') || '';
+    my $timeoutsec = 5;
+    my $execperlqx = 1;
 
     my $waitcounts = 0;
     my $idlecounts = 0;
     my $maxprocess = 'NaN';
-    my $timeoutsec = 5;
 
-    if( IPC::Cmd::can_run( $pcpstatcmd ) ) {
+    eval { 
+        require IPC::Cmd;
+        $pcpstatcmd = IPC::Cmd::can_run( $ENV{'pcppath'} || 'pcp_pool_status' );
+        $execperlqx = 0;
+    };
+
+    if( $pcpstatcmd ) {
         # pcp_pool_status is executable
         # Usage: pcp_pool_status [-d] timeout hostname port# username password
         my $commandarg = {};
         my $runcommand = '';
         my $cmdresults = undef;
+        my $stdouttext = q();
 
-        $commandarg  = { 'timeout' => $timeoutsec };
         $runcommand  = sprintf( "%s %d %s %d %s %s", $pcpstatcmd, $timeoutsec,
                             $pgpoolhost, $pgpoolport, $pgpooluser, $pgpoolpass );
-        $runcommand .= q( | grep -A1 'num_init_children') if $pathtogrep;
-        $cmdresults  = IPC::Cmd::run_forked( $runcommand, $commandarg );
+        $runcommand .= q( | grep -A1 'num_init_children');
 
-        if( length $cmdresults->{'stdout'} ) {
-            # Parse output data
-            #   'stdout' => '
-            #      name : num_init_children
-            #      value: 120
-            #   '
-            for my $e ( split( "\n", $cmdresults->{'stdout'} ) ) {
-                $maxprocess = $1 if $e =~ m|\Avalue: (\d+)|;
-            }
+        if( $execperlqx ) {
+            # no IPC::Cmd
+            $stdouttext = qx( $runcommand );
+
+        } else {
+            # use IPC::Cmd
+            $commandarg  = { 'timeout' => $timeoutsec };
+            $cmdresults = IPC::Cmd::run_forked( $runcommand, $commandarg );
+            $stdouttext = $cmdresults->{'stdout'} || q();
+        }
+
+        for my $e ( split( "\n", $stdouttext ) ) {
+            $maxprocess = $1 if $e =~ m|\Avalue: (\d+)|;
         }
 
         # Count the number of processes of pgpool
-        $runcommand  = IPC::Cmd::can_run('ps') || 'ps';
-        $runcommand .= q( ax);
-        $runcommand .= q( | grep 'pgpool: ' | grep -v 'grep') if $pathtogrep;
-        $commandarg  = { 'timeout' => $timeoutsec * 2 };
-        $cmdresults  = IPC::Cmd::run_forked( $runcommand, $commandarg );
+        $runcommand  = q(ps ax);
+        $runcommand .= q( | grep 'pgpool: ' | grep -v 'grep');
 
-        if( length $cmdresults->{'stdout'} ) {
+        if( $execperlqx ) {
+            # no IPC::Cmd
+            $stdouttext = qx( $runcommand );
 
-            for my $e ( split( "\n", $cmdresults->{'stdout'} ) ) {
+        } else {
+            # use IPC::Cmd
+            $commandarg = { 'timeout' => $timeoutsec * 2 };
+            $cmdresults = IPC::Cmd::run_forked( $runcommand, $commandarg );
+            $stdouttext = $cmdresults->{'stdout'} || q();
+        }
 
-                next unless $e =~ m|pgpool: |;
-                if( $e =~ m|pgpool: wait for connection request| ) {
-                    $waitcounts++;
+        for my $e ( split( "\n", $stdouttext ) ) {
 
-                } elsif( $e =~ m|pgpool: idle in transaction| ) {
-                    $idlecounts++;
-                }
+            next unless $e =~ m|pgpool: |;
+            if( $e =~ m|pgpool: wait for connection request| ) {
+                $waitcounts++;
+
+            } elsif( $e =~ m|pgpool: idle in transaction| ) {
+                $idlecounts++;
             }
         }
 
@@ -91,7 +104,7 @@ if( $argv eq 'autoconf' ) {
 
     } else {
         # Cannot run pcp_pool_status
-        printf STDERR "cannot execute %s\n", $pcpstatcmd;
+        printf STDERR "cannot execute pcp_pool_status command\n";
         exit(1);
     }
 }
