@@ -12,21 +12,6 @@ and make symbolic link to the file like following commands:
     # install -o root -m 0755 ./pgpool2_connections /usr/share/munin/plugins
     # ln -s /usr/share/munin/plugins/pgpool2_connections /etc/munin/plugins/
 
-#### Install dependencies
-
-*pgpool2_connections* is written in Perl and uses __IPC::Cmd__ module. The 
-module is a core module from Perl 5.9.4. Please install the module like following
-command when the module is not installed in your system.
-
-    # cpanm IPC::Cmd
-    # perldoc -l IPC::Cmd
-    /usr/share/perl5/IPC/Cmd.pm
-
-OR
-
-    # perl -MCPAN -e 'IPC::Cmd'
-
-
 ## Configuration and Run
 
 ### Edit plugin config file
