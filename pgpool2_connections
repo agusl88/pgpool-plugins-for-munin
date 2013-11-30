@@ -2,9 +2,10 @@
 # Perl version implementation of https://github.com/vpetersson/munin_pgpool
 use strict;
 use warnings;
+use Carp;
 
 my $argv = shift || '';
-my $VERSION = '0.0.3';
+my $VERSION = '0.0.4';
 
 if( $argv eq 'autoconf' ) {
     print 'yes'."\n";
@@ -45,13 +46,14 @@ if( $argv eq 'autoconf' ) {
         $execperlqx = 0;
     };
 
+    my $commandarg = {};
+    my $runcommand = '';
+    my $cmdresults = undef;
+    my $stdouttext = q();
+
     if( $pcpstatcmd ) {
         # pcp_pool_status is executable
         # Usage: pcp_pool_status [-d] timeout hostname port# username password
-        my $commandarg = {};
-        my $runcommand = '';
-        my $cmdresults = undef;
-        my $stdouttext = q();
 
         $runcommand  = sprintf( "%s %d %s %d %s %s", $pcpstatcmd, $timeoutsec,
                             $pgpoolhost, $pgpoolport, $pgpooluser, $pgpoolpass );
@@ -72,40 +74,62 @@ if( $argv eq 'autoconf' ) {
             $maxprocess = $1 if $e =~ m|\Avalue: (\d+)|;
         }
 
-        # Count the number of processes of pgpool
-        $runcommand  = q(ps ax);
-        $runcommand .= q( | grep 'pgpool: ' | grep -v 'grep');
+    } else {
+        # In the case of that pgpool 3.0 or older, there is no pcp_status_command
+        # Try to get the value of ``num_init_children'' from pgpool.conf
+        my $pgpooldirs = [ '/etc/pgpool-II' ];
+        my $pgpoolconf = undef;
+        my $filehandle = undef;
 
-        if( $execperlqx ) {
-            # no IPC::Cmd
-            $stdouttext = qx( $runcommand );
-
-        } else {
-            # use IPC::Cmd
-            $commandarg = { 'timeout' => $timeoutsec * 2 };
-            $cmdresults = IPC::Cmd::run_forked( $runcommand, $commandarg );
-            $stdouttext = $cmdresults->{'stdout'} || q();
+        for my $e ( @$pgpooldirs ) {
+            next unless -f $e.'/pgpool.conf';
+            $pgpoolconf = sprintf( "%s/pgpool.conf", $e );
+            last;
         }
 
-        for my $e ( split( "\n", $stdouttext ) ) {
+        if( -r $pgpoolconf ) {
+            require IO::File;
+            my $filehandle = IO::File->new( $pgpoolconf, 'r' ) || croak $!;
+            my $configfile = do { local $/; <$filehandle> };
+            $filehandle->close;
 
-            next unless $e =~ m|pgpool: |;
-            if( $e =~ m|pgpool: wait for connection request| ) {
-                $waitcounts++;
-
-            } elsif( $e =~ m|pgpool: idle in transaction| ) {
-                $idlecounts++;
+            for my $e ( split( "\n", $configfile ) ) {
+                next unless $e =~ m|\Anum_init_children|;
+                $maxprocess = $1 if $e =~ m|\num_init_children\s*[=]\s*(\d+)|;
+                last;
             }
         }
+    }
 
-        printf "wait.value %d\n", $waitcounts;
-        printf "idle.value %d\n", $idlecounts;
-        printf "max.value %s\n", $maxprocess;
+    # Count the number of processes of pgpool
+    $runcommand  = q(ps ax);
+    $runcommand .= q( | grep 'pgpool: ' | grep -v 'grep');
+
+    if( $execperlqx ) {
+        # no IPC::Cmd
+        $stdouttext = qx( $runcommand );
 
     } else {
-        # Cannot run pcp_pool_status
-        printf STDERR "cannot execute pcp_pool_status command\n";
-        exit(1);
+        # use IPC::Cmd
+        $commandarg = { 'timeout' => $timeoutsec * 2 };
+        $cmdresults = IPC::Cmd::run_forked( $runcommand, $commandarg );
+        $stdouttext = $cmdresults->{'stdout'} || q();
     }
+
+    for my $e ( split( "\n", $stdouttext ) ) {
+
+        next unless $e =~ m|pgpool: |;
+        if( $e =~ m|pgpool: wait for connection request| ) {
+            $waitcounts++;
+
+        } elsif( $e =~ m|pgpool: idle in transaction| ) {
+            $idlecounts++;
+        }
+    }
+
+    printf "wait.value %d\n", $waitcounts;
+    printf "idle.value %d\n", $idlecounts;
+    printf "max.value %s\n", $maxprocess;
+
 }
 __END__
