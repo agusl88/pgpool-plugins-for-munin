@@ -24,6 +24,11 @@ and make symbolic link to the file like following commands:
     env.userpwd password
     env.pcppath /path/to/pcp_pool_status
 
+If "env.pcppath" is not defined, the plugin finds "pcp\_pool\_status" command 
+from directories listed in $PATH environment variable. When the command is not
+installed your system, for example installed pgpool-II is 3.0 or older, the plugin
+gets the value of "num\_init\_children" from pgpool.conf file.
+
 ### Run with munin-run command
     # cd /etc/munin/plugins/
     # munin-run ./pgpool2_connections
