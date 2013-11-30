@@ -77,7 +77,12 @@ if( $argv eq 'autoconf' ) {
     } else {
         # In the case of that pgpool 3.0 or older, there is no pcp_status_command
         # Try to get the value of ``num_init_children'' from pgpool.conf
-        my $pgpooldirs = [ '/etc/pgpool-II' ];
+        my $pgpooldirs = [ 
+            '/etc', 
+            '/etc/pgpool-II', 
+            '/usr/local/pgpool/etc',
+            '/usr/local/pgpool2/etc',
+        ];
         my $pgpoolconf = undef;
         my $filehandle = undef;
 
