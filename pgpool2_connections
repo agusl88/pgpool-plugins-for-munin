@@ -5,7 +5,7 @@ use warnings;
 use Carp;
 
 my $argv = shift || '';
-my $VERSION = '0.0.4';
+my $VERSION = '0.0.5';
 
 if( $argv eq 'autoconf' ) {
     print 'yes'."\n";
@@ -100,7 +100,7 @@ if( $argv eq 'autoconf' ) {
 
             for my $e ( split( "\n", $configfile ) ) {
                 next unless $e =~ m|\Anum_init_children|;
-                $maxprocess = $1 if $e =~ m|\num_init_children\s*[=]\s*(\d+)|;
+                $maxprocess = $1 if $e =~ m|\Anum_init_children\s*[=]\s*(\d+)|;
                 last;
             }
         }
